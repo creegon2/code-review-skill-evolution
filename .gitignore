@@ -1,0 +1,55 @@
+# Python environments and build outputs
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.dist-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local credentials
+.env
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+
+# Formal inputs, outputs, caches, and model state stay outside Git
+data/
+datasets/
+gold/
+labels/
+references/
+results/
+runs/
+artifacts/
+evidence/
+candidate-runs/
+raw-traces/
+snapshots/
+traces/
+instances/
+codex-home/
+.cache/
+.state/
+receipts/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.jsonl
+*.parquet
+*.7z
+*.zip
+*.whl
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
