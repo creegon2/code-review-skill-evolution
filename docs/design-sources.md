@@ -1,21 +1,21 @@
-# Public repository design sources
+# Design sources
 
 [中文](design-sources.zh-CN.md)
 
-The repository uses a deliberately small version of structures visible in
-actively maintained public Python agent and evaluation projects:
+The repository layout is not invented here — it is the common minimum shared
+by actively maintained public Python agent/evaluation projects, kept
+deliberately small:
 
-- [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt): guide/reference
-  documentation and explicit benchmark-adapter boundaries.
-- [OpenAI Agents SDK for Python](https://github.com/openai/openai-agents-python):
-  src layout, separate tests and examples, and focused CI.
-- [Giskard OSS](https://github.com/Giskard-AI/giskard-oss): offline examples
-  validated in CI and package-level test separation.
-- [DeepEval](https://github.com/confident-ai/deepeval): visible examples,
-  documentation, tests, contribution files, and maintainer-facing project
-  metadata.
+- [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt) — the
+  guide-style documentation and the explicit benchmark-adapter boundary.
+- [OpenAI Agents SDK for Python](https://github.com/openai/openai-agents-python)
+  — the `src/` layout with separate `tests/` and `examples/`, and focused CI.
+- [Giskard OSS](https://github.com/Giskard-AI/giskard-oss) — offline examples
+  that CI actually runs, and package-level test separation.
+- [DeepEval](https://github.com/confident-ai/deepeval) — visible examples,
+  docs, tests, and contributor-facing project files.
 
-This project adopts the common minimum: src, tests, examples, docs, CI,
-LICENSE, CONTRIBUTING, SECURITY, and release checks. It does not copy their
-large data directories, web applications, monorepo layers, or product-specific
-integrations.
+What this project takes from them: `src/`, `tests/`, `examples/`, `docs/`,
+CI, LICENSE, CONTRIBUTING, SECURITY, and release checks. What it leaves
+behind: their data directories, web apps, monorepo layers, and
+product-specific integrations.

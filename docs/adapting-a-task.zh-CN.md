@@ -1,66 +1,85 @@
-# 适配另一个任务
+# 适配你自己的任务
 
 [English](adapting-a-task.md)
 
+框架自带的只有一个合成 demo 任务。要在你自己的代码评审材料上跑，需要定义
+任务边界并实现三个后端接口。本文逐步说明。
+
 ## 1. 定义任务边界
 
-明确任务的公开输入、仅 Controller 可见的标签、输出 schema 和测量目标。所有真实任务材料都必须放在本仓库之外。
+针对你的任务格式，决定每份材料归入 `TaskPackage` 四个槽位中的哪一个：
 
-构造 `TaskPackage`，其中包括：
+- **snapshot** —— Reviewer 可以读的代码树（一个目录）；
+- **diff** —— 待评审的变更；
+- **metadata** —— 其他允许 Reviewer 知道的信息（仓库名、变更描述等）；
+- **private_reference** —— 标准答案，放在快照目录*之外*。
 
-- 唯一任务 ID；
-- 不可变的快照目录；
-- 评审 diff；
-- 位于快照之外的私有 evaluator reference；
-- 对 Reviewer 安全的元数据。
+这个划分就是整件事的核心：前三样全部到达 Reviewer，只有第四样到达
+Evaluator。拿不准某份材料归哪边时，问一句"人类评审员拿得到这个吗？"——
+拿不到的就是参考答案材料。
 
-不得在公开元数据中放置 gold、oracle、answer、expected 或 reference 字段。
+`TaskPackage` 会在构造时拦住明显的错误（答案放进了快照、元数据键名长得像
+标签——`gold`、`expected`、`oracle` 之类会被按名拒绝），但它不认识你的
+数据。真实任务材料完全不要进这个仓库，仓库里只放适配器代码。
 
 ## 2. 实现 `ReviewerBackend`
 
-后端接收包含新 workspace、公开任务 payload、当前 Skill 和 attempt ID 的 `ReviewerRequest`。它必须返回 `FindingBatch`。
+只有一个方法：`review(request) -> FindingBatch`。request 里有全新的
+workspace 路径、公开任务 payload、当前 Skill 文本和 attempt ID。
 
-对于模型驱动的实现：
+接真实模型时，反复出现的主题是*全新且钉死*：
 
-- 固定后端和模型身份；
-- 强制执行超时；
-- 禁用未经批准的网络、工具、插件和共享状态；
-- 不得在不同 attempt 之间复用 conversation；
-- 仅在外部 run root 下，并按照操作者的数据政策保留原始 trace。
+- 钉死后端和模型身份，保证运行之间可比；
+- 每次 attempt 都从全新对话开始——复用对话会让知识在 attempt 之间流动，
+  悄悄破坏在位者与候选者的比较；
+- 设执行超时，关掉未经明确批准的网络、工具和共享状态；
+- 要保留原始模型 trace 的话，放在外部 run root 之下，按你自己的数据政策管。
 
 ## 3. 实现 `EvaluatorBackend`
 
-Reviewer 完成后，evaluator 才能接收完整的 `TaskPackage`。尽可能使用确定性 scorer。将歧义和 evaluator 失败与 Reviewer 失败分开记录。缺少匹配项时，不得默默将其重新解释为已确认的 bug 或非 bug。
+只有一个方法：`score(task, findings) -> Score`。它在 Reviewer 结束之后才
+运行，并且是唯一被允许读 `task.private_reference` 的后端。
+
+优先用确定性打分器——gate 靠分数比较两份 Skill，打分器的随机性会表现为两
+者之间的幻影差异。另外，"打分器判不了"要和"Reviewer 什么都没找到"分开
+记录；把模糊情况硬压成确信的 0 或 1，污染的正是 Optimizer 赖以学习的信号。
 
 ## 4. 实现 `OptimizerBackend`
 
-optimizer 接收包含当前 Skill 和有界 trajectory 摘要的 `OptimizationRequest`。它必须返回一个非空的候选 Skill。
+只有一个方法：`propose(request) -> str`，返回一个非空候选 Skill。request
+里是当前 Skill 和每个 attempt 的受限摘要——Optimizer 能拿到的仅此而已，
+没有答案，没有对话记录。
 
-对于正式 SkillOpt 使用，将这一边界绑定到固定版本的官方 checkout，并保持其 Trainer、reflection、merge、current/best state 以及 gate 语义不变。不得在 sidecar 或报告生成器中创建第二条隐藏的晋级路径。
+要用官方 SkillOpt，把你固定版本 checkout 的提案调用包进
+`SkillOptProposalBoundary`（见[正式集成](formal-integrations.zh-CN.md)）。
+SkillOpt 自己的训练循环、reflection 和状态留在原处，边界类只负责把请求
+递过去。
 
-## 5. 添加无模型测试
+抵制加旁路的诱惑：报表生成器或审计存储一旦开始影响提案或采纳，它就是第二
+个看不见的 Optimizer，结果从此说不清归功于谁。
 
-在测试临时目录下生成一个微型合成任务。使用 fake Reviewer、Evaluator 和 Optimizer backend。验证：
+## 5. 先用假后端测试，再花钱
 
-- private reference 的字节和路径不会进入 Reviewer task JSON；
-- 每个 attempt 都会获得新的 workspace；
-- selection 时 incumbent 和 candidate 都会重新运行；
-- 分数相等时拒绝 candidate；
-- 严格提升时接受 candidate；
-- final evaluation 使用被接受的 Skill；
-- 终态 receipt 完整且 schema 有效；
-- 正式产物不会写入 Git checkout。
+接真实模型之前，照着 `demo.py` 的做法给你的任务格式来一遍：在临时目录里
+生成一个微型合成任务，用假后端驱动流水线，把要紧的性质都断言到：
 
-合成 fixture 只测试契约，不是 benchmark 证据。
+- 标准答案的内容和路径都没出现在 Reviewer 的 workspace 里；
+- 每次 attempt 都有自己的 workspace；
+- 在位者和候选者都在选拔集上重跑了；
+- 分数打平被拒绝、严格更优被接受；
+- 终测阶段跑的是被采纳的那份 Skill；
+- 终态回执完整且符合 schema；
+- 没有任何东西写进 Git checkout。
 
-## 6. 正式运行检查清单
+这些测试便宜、确定，而且恰好逮得住那类等付费运行跑完才会暴露的泄漏 bug。
 
-- 真实输入和 reference 存放在 Git 之外。
-- train、selection 和 final 的身份已冻结且彼此不重叠。
-- model、scorer、SkillOpt、prompt 和 configuration 的身份已固定。
-- 已审计 Reviewer 的可见范围。
-- 每个 attempt 都使用隔离的 workspace 和 state。
-- run root 位于外部且为空。
-- 网络、审批、并发、超时和成本政策均已明确。
-- 运行期间不会修补任何阶段或重新配置任何阶段。
-- 发布审查同时覆盖 Git 文件和生成的 source archive。
+## 6. 正式运行前的检查单
+
+- 真实任务和标准答案都在 Git 之外。
+- train、selection、final 三组任务 ID 已冻结且互不重叠。
+- 模型、打分器、SkillOpt 版本、prompt、配置都已钉死。
+- 审计过 Reviewer 在 workspace 里实际能看到什么。
+- run root 在仓库外且为空。
+- 网络、并发、超时、成本政策都已写明。
+- 没有人会在运行中途"顺手修一下"某个阶段——改动等下一次运行。
+- 发布审查覆盖生成的归档包，不只是 Git 文件。

@@ -2,60 +2,53 @@
 
 [English](formal-integrations.md)
 
-这个无依赖核心有意保持得比正式实验环境更小。要进行真实运行，必须明确配置
-外部集成。
+仓库里的核心零第三方依赖就能跑——也正因如此，它自己跑不了真实实验。本文
+列出正式运行需要外接的组件，以及各自的规则。
 
-## SkillOpt
+## SkillOpt（Optimizer）
 
-请使用官方的 [Microsoft SkillOpt 仓库](https://github.com/microsoft/SkillOpt)。
-公开边界已基于提交
-`3c8873f016397817dcd40c3e5436d92fe19372b8` 完成验证。每次正式运行都应固定
-使用一个经过审查的版本。
+用官方 [Microsoft SkillOpt 仓库](https://github.com/microsoft/SkillOpt)。
+这边的边界层是对着基线 commit `3c8873f016397817dcd40c3e5436d92fe19372b8`
+验证的；每次正式运行钉死一个审过的版本，并拿你的适配器对着那个确切版本
+测试——版本号相同不等于代码相同。
 
-模块 `integrations/skillopt.py` 为由操作者负责提供的可调用对象暴露
-`SkillOptProposalBoundary`。它只传入当前 Skill 和有界的轨迹摘要；不会在本仓库中打包或重新实现
-SkillOpt 的 Trainer、reflection、merge 或 gate 行为。
+`integrations/skillopt.py` 提供 `SkillOptProposalBoundary`：一个薄包装，
+包住你从固定 checkout 里提供的调用。它传入当前 Skill 和受限的 attempt
+摘要，期待返回一个候选 Skill。它刻意不搬运、不复刻 SkillOpt 的 Trainer、
+reflection、merge、gate 逻辑——那些留在上游，才能对着钉死的 commit 审计。
 
-生产适配器应针对所选择的确切上游版本进行测试。仅有相同的版本号，不能证明
-代码完全相同。
+## 代码评审打分器（Evaluator）
 
-## 代码评审评分器
+本框架的前身私有环境用的是围绕
+[Alibaba AACR-Bench](https://github.com/alibaba/aacr-bench)（commit
+`b3072489eace26efca8bcf2b1ac6a24ba64f82c1`）的适配层。其代码和数据都不在
+本仓库里。
 
-早期的私有环境曾围绕 [Alibaba AACR-Bench](https://github.com/alibaba/aacr-bench)
-使用一层适配器边界，使用的提交是 `b3072489eace26efca8bcf2b1ac6a24ba64f82c1`。
-本仓库不包含它的代码或数据。
-
-操作者可以使用这个固定版本的评分器，或其他面向具体任务的确定性评估器，实现
-`EvaluatorBackend`。参考标签只能提供给 Controller/Evaluator；同时要把适配器产生的测量结果与官方排行榜指标区分开。
+你可以用那个打分器或任何确定性的任务专用打分器实现 `EvaluatorBackend`。
+无论选哪个，两条规则不变：参考标签只有控制器和 Evaluator 可读；经你的
+适配层得出的测量结果要如实标注来源——它们不是官方榜单数字。
 
 ## Reviewer 模型
 
-`ReviewerBackend` 有意保持与模型提供商无关。基于模型的实现必须明确配置模型身份、推理设置、沙箱、网络、工具、凭据、并发数、超时和保留策略。
-每次尝试都必须从全新的上下文开始，并且不得读取其他尝试、选择标签、最终标签或私有参考资料。
+`ReviewerBackend` 刻意保持提供商中立。接真实模型时必须钉死模型身份和推理
+设置，并显式配置沙箱、网络、工具、凭据、并发、超时和 trace 保留策略。每次
+attempt 从全新上下文开始，不能读到其他 attempt、选拔或终测标签、标准
+答案——框架在磁盘上强制的隔离，你的后端要在模型上下文里同样守住。
 
 ## 可选的审计存储
 
-核心会写入 JSON 回执，不要求使用 HeavenBase。操作者可以额外接入一个与主流程分离的 HeavenBase 或其他审计存储旁路组件；该组件只能读取已完成的产物、核验哈希，并保存精简的来源信息。
+核心只写普通 JSON 回执，不需要数据库。想要更长期的溯源，可以加一个
+sidecar（HeavenBase 或别的都行）：读已完成的产物、核验哈希、存一份紧凑
+拷贝。
 
-旁路组件不得：
+唯一的设计规则：sidecar 对循环是只读的。它不能改 Skill 或分数、不能把
+参考材料回灌进训练、不能把未完成的产物包装成完成的、不能和另一次运行共享
+状态。能影响实验的审计记录，就不再是审计记录了。
 
-- 修改当前 Skill 或最佳 Skill；
-- 更改分数或 gate 决策；
-- 将隐藏的参考资料送入训练；
-- 把未完成的官方产物伪装成已完成；
-- 写入另一次运行正在使用的共享状态树。
+## 哪些东西留在 Git 之外
 
-本仓库不包含任何私有 HeavenBase wheel、本地路径依赖、数据库或源码检出副本。
+运行接触或产出的一切都在 checkout 之外：快照和 diff、任何 split 的标签、
+prompt 和模型 trace、候选 Skill、分数、回执、运行数据库、凭据。
 
-## 数据位置
-
-以下所有内容都应放在 Git 之外：
-
-- 任务快照和评审差异；
-- train、selection、held-out 或 final 标签；
-- 模型提示词、响应、对话和原始轨迹；
-- 轨迹包和候选输出；
-- 分数、报告、回执和运行数据库；
-- 模型凭据和隔离的后端状态。
-
-公开发布防护是额外的一项检查，不能替代操作者对 Git 历史和生成归档文件的审查。
+`scripts/public_release_check.py` 会在公开发布前扫一遍防事故，但它是安全
+网，不能替代审查本身——Git 历史和生成的归档包也要看。

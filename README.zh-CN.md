@@ -2,79 +2,85 @@
 
 [English README](README.md)
 
-这是一个不带实验数据的公开参考框架，用来把代码评审任务接进一条可审计的
-Skill 学习与选择流程。
+一个让 AI 代码评审的"方法论"自动进化的框架：跑评审任务、对着隐藏答案打分、
+提出改进版方法论，只有新版确实赢过旧版才采纳。
 
-仓库只发布编排代码、角色边界、数据契约、测试和流程文档；不发布真实任务、
-项目源码快照、diff、私有标签、模型对话、trajectory、分数、运行 receipt、
-数据库或凭据。
+## 一分钟看懂它在干什么
 
-## 它具体跑什么
+AI 做代码评审时，行为由一份叫 **Skill** 的 markdown 文档引导——里面写着
+"检查每个新增的提前 return 是否跳过了资源清理"这类指令。这份文档通常靠人
+手工调优，本框架把调优变成一个自动循环：
 
-~~~text
-操作者在仓库外准备输入
-  -> 冻结身份和哈希
-  -> Reviewer 在独立 workspace 中执行
-  -> Controller 使用私有参考做评测（正式运行应使用确定性 scorer）
-  -> 只把受限轨迹摘要交给 Optimizer
-  -> 生成候选 Skill
-  -> incumbent 和 candidate 在 selection 任务上分别重跑
-  -> 严格机械 gate
-  -> final 评估
-  -> 在仓库外写终态 receipt
-~~~
+1. **评审。** AI（称为 *Reviewer*）用当前 Skill 评审一批训练任务，输出
+   finding（文件、行号范围、严重级别、问题摘要）。
+2. **打分。** 裁判（称为 *Evaluator*）拿 Reviewer 永远看不到的私有标准答案
+   对比这些 finding，给出分数。
+3. **提议。** *Optimizer* 根据分数摘要，提出一份改进版的候选 Skill。
+4. **对决。** 旧 Skill（在位者）和新 Skill（候选者）在另一批全新的选拔任务
+   上各跑一遍，候选者只有严格胜出才被采纳。
+5. **终测。** 胜者在完全没接触过的终测任务集上跑一次，整轮结果写进一份
+   回执（receipt）文件存档。
 
-默认 quick start 使用临时合成任务和 fake backend，不需要模型账号、网络、
-benchmark checkout 或 HeavenBase。它证明框架连线和隔离契约能跑通，不是
-真实实验成绩。
+这种自我改进的循环很容易在不知不觉中"作弊"：标准答案漏进了 Reviewer 的
+工作目录、Optimizer 偷看了答案、终测用了训练时见过的任务。本仓库的大部分
+代码就是为了让这类作弊在结构上不可能发生——每个角色只能看到它该看的东西，
+并且有测试守着。具体的边界设计见[架构文档](docs/architecture.zh-CN.md)。
 
-## 角色边界
+## 仓库里有什么、没有什么
 
-| 角色 | 负责 | 不负责 |
-|---|---|---|
-| Reviewer | 读取当前任务允许看到的材料，输出结构化 finding | 读取私有参考、其他 attempt 或 final 标签 |
-| Evaluator | Reviewer 停止后，用 Controller 私有材料评分 | 修改 Skill 或 Reviewer 输出 |
-| Optimizer | 根据受限轨迹摘要提出候选 Skill | 读取 raw reference 或代替 Evaluator |
-| Gate | 机械比较 incumbent 与 candidate | 人工偏好式晋级 |
-| Runner | 冻结输入、串联阶段、写 receipt | 在运行中手补产物或改配置 |
-| 可选 sidecar | 把已完成 provenance 镜像到外部审计存储 | 反向改变 Trainer 的 gate 或父 Skill |
+仓库只包含编排框架本身：流水线、角色之间的数据契约、隔离规则、测试和文档。
 
-## 本地离线运行
+**不包含任何评测数据、模型接入和实验结果。** 要跑真实实验，需要你自己提供
+评审任务、模型后端、打分器，以及（如果想用完整的 Skill 优化算法）一份固定
+版本的 [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt)。各部分
+怎么接，见[正式集成说明](docs/formal-integrations.zh-CN.md)。
 
-需要 Python 3.10 或更新版本。先创建并按当前 shell 的方式激活虚拟环境，再运行：
+## 快速上手（不需要模型和网络）
+
+内置 demo 用一个合成的单 bug 任务和假的 Reviewer/Evaluator/Optimizer 把整个
+循环跑一遍——它验证的是连线和隔离规则能正常工作，不代表任何真实评审效果。
+
+需要 Python 3.10+：
 
 ~~~bash
 python -m venv .venv
-# 激活 .venv 后：
+# 按你的 shell 激活 .venv，然后：
 python -m pip install -e ".[dev]"
 python -m pytest
 python -m code_review_skill_evolution
 ~~~
 
-默认产生的合成输入和输出都在临时目录，命令结束后会清理。要保留合成产物，
-必须指定 Git checkout 之外的绝对目录：
+默认所有输入输出都在临时目录里，跑完即清理。想保留产物，用 `--run-root`
+指定一个**仓库之外**的目录（runner 会拒绝写进 Git checkout 内部，这样生成
+的产物永远不会混进提交）：
 
 ~~~bash
 python -m code_review_skill_evolution --run-root /absolute/external/run
 ~~~
 
-## 正式运行还需要什么
+## 各角色分工
 
-正式运行需要操作者另外提供：任务快照与 diff、私有参考标签、固定 SkillOpt
-或其他 Optimizer、Reviewer 模型与权限、任务专用 scorer、冻结 split 与
-配置、独立 workspace、仓库外 run root，以及网络、时间、并发和成本政策。
+| 角色 | 做什么 | 被刻意禁止做什么 |
+|---|---|---|
+| Reviewer | 在全新 workspace 里评审一个任务，返回 finding | 看标准答案、别的 attempt、终测标签 |
+| Evaluator | 拿私有标准答案给完成的 finding 打分 | 修改 Skill 或 Reviewer 的输出 |
+| Optimizer | 根据分数摘要提出候选 Skill | 看标准答案或原始模型对话 |
+| Gate | 纯机械地比较在位者和候选者的分数 | 凭任何人的主观偏好放行候选者 |
+| Pipeline（控制器） | 冻结输入、按序执行各阶段、写回执 | 中途修补产物或改配置 |
+| 审计 sidecar（可选） | 把已完成的产物镜像到外部存储 | 向循环回灌任何信息 |
 
-这些内容不会随公开仓库发布。具体边界见
-[正式集成说明](docs/formal-integrations.zh-CN.md)。
+Reviewer、Evaluator、Optimizer 是注入式接口（见 `backends.py`），可以分别
+接真实模型、确定性打分器或官方 SkillOpt。
 
-## 公开边界
+## 数据放哪里
 
-Reviewer workspace 只复制 snapshot、review diff、当前 Skill 和公开任务
-metadata。private reference 必须放在 snapshot 之外，只能在 Reviewer 结束后
-交给 Evaluator。Optimizer 只接收分数、finding 数量等受限摘要，不接收
-private reference 或 raw trace。
+数据处理的设计基本可以归结为两条规则：
 
-每次公开前运行：
+- **标准答案只归裁判。** Reviewer 的 workspace 按白名单构建——代码快照、
+  评审 diff、当前 Skill、公开元数据，仅此四样。标准答案必须放在快照目录
+  **之外**，因为 workspace 就是快照的一份拷贝：放在里面等于直接发给考生。
+- **运行产物不进 Git。** 每次运行都写到仓库外的目录。公开发布前跑一遍
+  发布检查，确认没有私有内容混入：
 
 ~~~bash
 python scripts/public_release_check.py --all-files
@@ -82,30 +88,34 @@ python -m build
 python scripts/public_release_check.py --archives
 ~~~
 
-合成 smoke 只能证明框架流程可执行，不能证明 Skill 在真实 benchmark、其他
-模型或未见数据上会提升。
-
-## 目录
+## 目录结构
 
 ~~~text
-src/code_review_skill_evolution/   无外部依赖的编排核心
-tests/unit/                        确定性契约测试
-tests/integration/                 合成端到端测试
-examples/                          离线示例
-docs/                              架构、流程与适配说明
+src/code_review_skill_evolution/   框架本体（零第三方依赖）
+  contracts.py                     角色间传递的数据契约
+  pipeline.py                      进化循环本身
+  gate.py                          候选者 vs 在位者的严格比较
+  isolation.py                     按白名单构建 Reviewer workspace
+  demo.py                          离线合成 demo
+  integrations/skillopt.py         官方 SkillOpt 的薄接口层
+tests/unit/                        契约、gate、隔离的单元测试
+tests/integration/                 端到端合成运行
+examples/                          可运行的离线示例
+docs/                              架构、流程、适配指南
 scripts/                           公开发布检查
-.github/                           CI 与贡献模板
 ~~~
 
 ## 文档
 
-- [中文文档导航](docs/index.zh-CN.md)
-- [架构与信任边界](docs/architecture.zh-CN.md)
-- [工作流与状态](docs/workflow.zh-CN.md)
-- [如何适配新任务](docs/adapting-a-task.zh-CN.md)
-- [正式集成](docs/formal-integrations.zh-CN.md)
-- [公开仓库的设计参考](docs/design-sources.zh-CN.md)
-- [第三方说明](THIRD_PARTY_NOTICES.zh-CN.md)
+- [架构与信任边界](docs/architecture.zh-CN.md) —— 角色、契约，以及每道墙
+  为什么存在
+- [工作流程](docs/workflow.zh-CN.md) —— 一次运行的逐阶段拆解
+- [适配你自己的任务](docs/adapting-a-task.zh-CN.md)
+- [正式集成](docs/formal-integrations.zh-CN.md) —— 接真实模型、打分器、
+  SkillOpt、审计存储
+- [仓库结构的出处](docs/design-sources.zh-CN.md)
 
-当前 0.1.0 是参考实现和 POC 基础设施，不包含任何真实 benchmark 结论。
-仓库原创代码使用 [MIT License](LICENSE)。
+## 状态与许可
+
+0.1.0 是参考实现：离线路径可复现，不含真实评测结果。原创代码以
+[MIT License](LICENSE) 发布，外部集成各自保留原许可。

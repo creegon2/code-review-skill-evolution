@@ -1,11 +1,16 @@
-# 文档
+# 文档导航
 
 [English](index.md)
 
-建议先阅读[架构与信任边界](architecture.zh-CN.md)，再阅读[工作流](workflow.zh-CN.md)。
-如果要增加另一种代码评审格式，请阅读[适配新任务](adapting-a-task.zh-CN.md)；在连接真实模型、评分器、SkillOpt
-检出目录或审计存储之前，请先阅读[正式集成](formal-integrations.zh-CN.md)。
+初次接触？先读 [README](../README.zh-CN.md)——一分钟讲清进化循环是什么。
+然后按需要选：
 
-有关本框架设计所依据的资料，请参阅[设计来源](design-sources.zh-CN.md)。
+- **理解设计** —— [架构](architecture.zh-CN.md)：角色、数据契约，以及每
+  道隔离墙为什么存在。接着看[工作流程](workflow.zh-CN.md)，逐阶段拆解一次
+  运行。
+- **在自己的任务上跑** —— [适配你自己的任务](adapting-a-task.zh-CN.md)。
+- **接真实组件**（模型、打分器、SkillOpt、审计存储）——
+  [正式集成](formal-integrations.zh-CN.md)。
+- **好奇仓库结构从哪来** —— [仓库结构的出处](design-sources.zh-CN.md)。
 
-这些文档描述的是框架契约，不包含实验数据或结果声明。
+这些文档描述的是框架及其契约；仓库不含实验数据或结果。

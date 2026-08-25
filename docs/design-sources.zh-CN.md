@@ -1,12 +1,19 @@
-# 公开仓库设计来源
+# 仓库结构的出处
 
 [English](design-sources.md)
 
-本仓库有意采用了一套精简版结构，其设计参考了以下仍在积极维护的公开 Python Agent 和评测项目中可见的做法：
+这个仓库的布局不是自创的——它是活跃维护的公开 Python agent/评测项目共有
+的最小公约数，再刻意做小：
 
-- [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt)：指南/参考文档，以及明确的 benchmark 适配器边界。
-- [OpenAI Agents SDK for Python](https://github.com/openai/openai-agents-python)：`src` 目录布局、分离的测试与示例，以及聚焦的 CI。
-- [Giskard OSS](https://github.com/Giskard-AI/giskard-oss)：在 CI 中验证的离线示例，以及按包分离的测试。
-- [DeepEval](https://github.com/confident-ai/deepeval)：公开示例、文档、测试、贡献文件，以及面向维护者的项目元数据。
+- [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt) —— 指南式
+  文档和显式的 benchmark 适配器边界。
+- [OpenAI Agents SDK for Python](https://github.com/openai/openai-agents-python)
+  —— `src/` 布局、tests 与 examples 分离、聚焦的 CI。
+- [Giskard OSS](https://github.com/Giskard-AI/giskard-oss) —— CI 真的会跑
+  的离线示例、包级测试分离。
+- [DeepEval](https://github.com/confident-ai/deepeval) —— 面向贡献者的
+  示例、文档、测试和项目元文件。
 
-本项目采用这些项目共有的最小集合：`src`、`tests`、`examples`、`docs`、CI、`LICENSE`、`CONTRIBUTING`、`SECURITY` 和发布检查。但本项目并未复制它们的大型数据目录、Web 应用、单仓库多层结构或特定产品集成。
+从它们那里取的：`src/`、`tests/`、`examples/`、`docs/`、CI、LICENSE、
+CONTRIBUTING、SECURITY、发布检查。没取的：数据目录、Web 应用、monorepo
+层级、产品专属集成。

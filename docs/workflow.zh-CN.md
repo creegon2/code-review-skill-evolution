@@ -1,61 +1,85 @@
-# 工作流与状态转换
+# 工作流程：一次运行的逐阶段拆解
 
 [English](workflow.md)
 
-## 状态拓扑
+一次运行（run）是进化循环转一整圈：基线、提案、对决、终测。阶段永远按下面
+的顺序执行，每个阶段的结果都会追加进最终的回执：
 
 ~~~text
-prepared
-  -> inputs_frozen
-  -> train_reviewer_completed
-  -> train_evaluated
-  -> candidate_proposed
-  -> incumbent_selection_completed
-  -> candidate_selection_completed
-  -> gate_decided
-  -> final_evaluated
-  -> terminal
+冻结输入
+  -> Reviewer 跑训练任务
+  -> Evaluator 给训练 attempt 打分
+  -> Optimizer 提出一个候选 Skill
+  -> 在位者在选拔任务上重跑
+  -> 候选者在同一批选拔任务上重跑
+  -> gate 裁决胜者
+  -> 胜者跑终测任务
+  -> 写终态回执
 ~~~
 
-外部运行根目录完成校验并创建后，任何后续异常都会写入失败的终态回执，并停止运行。在创建回执之前，框架会拒绝无效的输出位置。框架不会补填缺失字段，也不会从其他运行继续执行。
+运行目录建立之后，任何阶段抛异常都会写一份 `failed` 回执（记录跑到了哪一
+步）然后停止。流水线不跳过阶段、不补缺失值、也不会接着一个半成品目录继续跑。
 
 ## 1. 冻结输入
 
-Controller 会对初始 Skill、每个 diff、每棵 snapshot tree 以及每个 private reference 计算哈希。manifest 记录哈希和公开元数据，不记录机器路径。Reviewer 运行前会冻结 Split identities。
+开跑之前，控制器先给初始 Skill、每个 diff、每棵快照树、每份标准答案算哈希，
+写进 manifest。从这一刻起，"这次运行用的是哪些输入"就有了精确可查的答案——
+事后哪个文件被改了，哈希立刻对不上。manifest 记录哈希和公开元数据，不记录
+机器路径。
 
-## 2. 运行训练 Reviewer
+## 2. Reviewer 跑训练任务
 
-对于每个 train task，Controller 都会创建一个全新的 allowlist workspace，并将其传给 ReviewerBackend。原始 private reference 永远不会复制到该 workspace 中。
+对每个训练任务，控制器建一个全新 workspace（只放白名单里的四样：快照拷贝、
+diff、当前 Skill、公开任务 JSON），交给 Reviewer，Reviewer 返回一批
+finding。标准答案永远不会被拷进任何 workspace。
 
-## 3. rollout 后评估
+## 3. 给训练 attempt 打分
 
-只有在 FindingBatch 完成定稿后，EvaluatorBackend 才会运行。它可以读取由 Controller 管理的 private reference，并返回一个 Score。对于 operator-supplied scorer，确定性是 formal run 的要求；但注入协议本身无法证明这一点。Finding 和 score 会写入外部运行根目录下。
+Evaluator 只在 finding 定稿之后才登场：读标准答案、对比、返回分数。顺序很
+关键——Evaluator 手里握着答案，绝不能碰还在进行中的 attempt。finding 和
+分数随产出即写入 run root。
 
-## 4. 提出一个 candidate
+正式运行的打分器应当是确定性的（同样的 finding 得同样的分），否则第 6 步
+在位者与候选者的比较反映的就是打分器的噪音，而不是两份 Skill 的差别。
 
-Optimizer 接收有界的 AttemptSummary 值。在正式的 SkillOpt 部署中，固定版本的 official runtime 应执行反思和 candidate 构造。offline smoke 只使用确定性的 fake 来演练这次交接。
+## 4. 提出一个候选
 
-## 5. 重新运行 selection
+Optimizer 收到当前 Skill 加上每个训练 attempt 的一份受限摘要（分数和
+finding 数量，见[AttemptSummary](architecture.zh-CN.md#数据契约)），返回
+恰好一个候选 Skill。正式部署里这一步由官方 SkillOpt 做 reflection；离线
+demo 用一个只会追加一条规则的确定性假实现，足够验证交接。
 
-Incumbent Skill 和 candidate Skill 都会在同一个冻结的 selection set 上接受全新的 attempt。任何一次运行都不会复用训练 workspace。两者的 score 会分别聚合。
+## 5. 两份 Skill 在选拔集上重跑
 
-## 6. 应用严格 gate
+在位者和候选者各自在同一批冻结的选拔任务上跑全新的 attempt——这些任务谁都
+没训练过。双方都从干净 workspace 出发，训练阶段的任何东西都不复用。两边的
+分数分别聚合（算术平均）。
 
-只有满足以下条件之一，candidate 才会被接受：
+## 6. 过 gate
 
-1. 它的 aggregate primary score 更高；或
-2. primary score 持平，且它的 aggregate secondary score 更高。
+候选者只有严格胜出才被采纳：
 
-结果相同或更低都会被拒绝。手动 promotion 不属于参考工作流。
+1. 聚合 primary 分更高；或
+2. primary 打平且聚合 secondary 分更高。
 
-## 7. 最终评估
+平局判给在位者。这是刻意保守的：一个只打平的候选者什么也没证明，放它过关
+等于让 Skill 在噪音上漂移。这条流水线里没有手动放行口——人若执意要晋级某
+份 Skill，那个决定应该发生在框架之外，明明白白作为人的决定被看到。
 
-只有被接受的 Skill 才会在互不重叠的 final set 上运行。final score 是针对确切所提供的数据、模型、scorer 和 configuration 的测量证据，不会自动成为可泛化性的证据。
+## 7. 终测
 
-## 8. 写入终态回执
+胜出的 Skill 在终测集上跑一次——这批任务既没参与训练也没参与选拔。这就是
+一次运行的最终数字：被采纳的 Skill 在从未接触过的数据上的测量结果，适用于
+这一组特定的任务、模型、打分器和配置。
 
-回执包含 manifest hash、按顺序排列的 stage status、gate inputs 和 decision、被接受的 Skill hash，以及 final aggregate score。回执有意不声称框架或 Skill 在普遍意义上有效。
+## 8. 写终态回执
 
-## 恢复规则
+回执（`terminal-receipt.json`）记录 manifest 哈希、各阶段状态、gate 的输入
+与裁决、被采纳 Skill 的哈希、终测聚合分。拿着回执和运行目录，任何人都能
+核验：跑了什么、什么顺序、用了哪些输入、得了多少分。
 
-配置和实现变更应发生在两次运行之间。发生失败或设计变更后，启动新的 run identity 和目录。绝不要手动修改活动运行的 trace、candidate、score 或 receipt。
+## 想改东西？在两次运行之间改
+
+配置、代码、模型、数据、打分器的变更都发生在运行边界上：结束（或放弃）
+当前运行，改你要改的，然后用新的空 run root 开新运行。永远不要编辑已有的
+运行目录——它的全部价值就在于忠实反映了记录在案的那一种配置。
