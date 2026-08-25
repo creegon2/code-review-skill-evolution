@@ -1,5 +1,7 @@
 # Public repository design sources
 
+[中文](design-sources.zh-CN.md)
+
 The repository uses a deliberately small version of structures visible in
 actively maintained public Python agent and evaluation projects:
 

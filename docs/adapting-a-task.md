@@ -1,5 +1,7 @@
 # Adapting another task
 
+[中文](adapting-a-task.zh-CN.md)
+
 ## 1. Define the task boundary
 
 Identify the task's public inputs, controller-only labels, output schema, and

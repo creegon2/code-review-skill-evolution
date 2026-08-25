@@ -1,5 +1,7 @@
 # Third-party notices
 
+[中文](THIRD_PARTY_NOTICES.zh-CN.md)
+
 This repository does not vendor third-party source code, benchmark data, model
 outputs, or binary packages. The integrations below are external and optional.
 

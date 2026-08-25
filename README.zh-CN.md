@@ -65,7 +65,7 @@ python -m code_review_skill_evolution --run-root /absolute/external/run
 配置、独立 workspace、仓库外 run root，以及网络、时间、并发和成本政策。
 
 这些内容不会随公开仓库发布。具体边界见
-[正式集成说明](docs/formal-integrations.md)。
+[正式集成说明](docs/formal-integrations.zh-CN.md)。
 
 ## 公开边界
 
@@ -99,11 +99,13 @@ scripts/                           公开发布检查
 
 ## 文档
 
-- [架构与信任边界](docs/architecture.md)
-- [工作流与状态](docs/workflow.md)
-- [如何适配新任务](docs/adapting-a-task.md)
-- [正式集成](docs/formal-integrations.md)
-- [第三方说明](THIRD_PARTY_NOTICES.md)
+- [中文文档导航](docs/index.zh-CN.md)
+- [架构与信任边界](docs/architecture.zh-CN.md)
+- [工作流与状态](docs/workflow.zh-CN.md)
+- [如何适配新任务](docs/adapting-a-task.zh-CN.md)
+- [正式集成](docs/formal-integrations.zh-CN.md)
+- [公开仓库的设计参考](docs/design-sources.zh-CN.md)
+- [第三方说明](THIRD_PARTY_NOTICES.zh-CN.md)
 
 当前 0.1.0 是参考实现和 POC 基础设施，不包含任何真实 benchmark 结论。
 仓库原创代码使用 [MIT License](LICENSE)。

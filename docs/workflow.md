@@ -1,5 +1,7 @@
 # Workflow and state transitions
 
+[中文](workflow.zh-CN.md)
+
 ## State topology
 
 ~~~text

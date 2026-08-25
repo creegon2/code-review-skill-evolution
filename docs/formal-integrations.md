@@ -1,5 +1,7 @@
 # Formal integrations
 
+[中文](formal-integrations.zh-CN.md)
+
 The dependency-free core is intentionally smaller than a formal experiment
 environment. Real operation needs explicit external integrations.
 

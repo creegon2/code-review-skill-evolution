@@ -1,5 +1,7 @@
 # Architecture and trust boundaries
 
+[中文](architecture.zh-CN.md)
+
 ## Purpose
 
 The project is a small orchestration companion, not a benchmark bundle,
